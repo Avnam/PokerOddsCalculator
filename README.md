@@ -17,11 +17,9 @@ npm run dev
 
 ## Deploy
 
-Push to `main` → GitHub Actions builds an obfuscated bundle → deploys to GitHub Pages.
+Push to `dev` → GitHub Actions builds and deploys to GitHub Pages.
 
 ### Setup GitHub Pages
 1. Go to repo **Settings → Pages**
 2. Set Source to **GitHub Actions**
-3. Push to `main` — done
-
-The deployed JS is minified + obfuscated (control flow flattening, string encoding, dead code injection). Source code stays clean in the repo.
+3. Push to `dev` — done
