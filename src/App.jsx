@@ -603,9 +603,16 @@ export default function PokerCalc() {
   const [progress, setProgress] = useState(null);
   const [info, setInfo] = useState(null);
   const [picker, setPicker] = useState(null);
-  const [history, setHistory] = useState([]);
+  const [history, setHistory] = useState(() => {
+    try { const s = localStorage.getItem("pokerHistory"); return s ? JSON.parse(s) : []; }
+    catch { return []; }
+  });
   const cancelRef = useRef(false);
   const cfg = VARIANTS[variant];
+
+  useEffect(() => {
+    try { localStorage.setItem("pokerHistory", JSON.stringify(history)); } catch {}
+  }, [history]);
 
   const usedCards = new Set();
   players.forEach(p => p.forEach(c => usedCards.add(c)));
@@ -655,7 +662,7 @@ export default function PokerCalc() {
             board2: [...board2],
             results: res,
           };
-          return [entry, ...filtered].slice(0, 10);
+          return [entry, ...filtered].slice(0, 20);
         });
       },
       cancelRef
@@ -1012,8 +1019,8 @@ export default function PokerCalc() {
             fontFamily: "'Space Mono', monospace", letterSpacing: 1,
             display: "flex", justifyContent: "space-between", alignItems: "center",
           }}>
-            <span>HISTORY ({history.length}/10)</span>
-            <span style={{ fontSize: 8, color: "#2a2a4a", fontWeight: 400, letterSpacing: 0.5 }}>session only</span>
+            <span>HISTORY ({history.length}/20)</span>
+            <span style={{ fontSize: 8, color: "#2a2a4a", fontWeight: 400, letterSpacing: 0.5 }}>persistent</span>
           </div>
           {history.map((h, hi) => (
             <div key={h.id} onClick={() => {
