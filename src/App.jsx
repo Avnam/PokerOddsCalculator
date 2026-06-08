@@ -16,10 +16,11 @@ function eval5(c0, c1, c2, c3, c4) {
   const r0 = c0 >> 2, r1 = c1 >> 2, r2 = c2 >> 2, r3 = c3 >> 2, r4 = c4 >> 2;
   const isFlush = (c0 & 3) === (c1 & 3) && (c1 & 3) === (c2 & 3) && (c2 & 3) === (c3 & 3) && (c3 & 3) === (c4 & 3);
   let a = r0, b = r1, c = r2, d = r3, e = r4, t;
-  if (a < b) { t = a; a = b; b = t } if (d < e) { t = d; d = e; e = t } if (a < c) { t = a; a = c; c = t }
-  if (b < c) { t = b; b = c; c = t } if (a < d) { t = a; a = d; d = t } if (c < d) { t = c; c = d; d = t }
-  if (b < d) { t = b; b = d; d = t } if (b < c) { t = b; b = c; c = t } if (d < e) { t = d; d = e; e = t }
+  if (a < b) { t = a; a = b; b = t } if (b < c) { t = b; b = c; c = t }
   if (c < d) { t = c; c = d; d = t } if (d < e) { t = d; d = e; e = t }
+  if (a < b) { t = a; a = b; b = t } if (b < c) { t = b; b = c; c = t }
+  if (c < d) { t = c; c = d; d = t } if (a < b) { t = a; a = b; b = t }
+  if (b < c) { t = b; b = c; c = t } if (a < b) { t = a; a = b; b = t }
 
   const counts = [0,0,0,0,0,0,0,0,0,0,0,0,0];
   counts[r0]++; counts[r1]++; counts[r2]++; counts[r3]++; counts[r4]++;
