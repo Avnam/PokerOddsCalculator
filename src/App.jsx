@@ -287,9 +287,8 @@ function runCalculation(variant, players, board, board2, dead, maxIter, onProgre
         if (hw.length === 1) scoopsA[hw[0]]++;
       } else {
         if (lw.length === 1) loWins[lw[0]]++; else { const sh = 1/lw.length; for (const x of lw) loTies[x] += sh }
-        // Scoop = win both hi and lo
-        const hs = new Set(hw), ls = new Set(lw);
-        for (const x of hs) if (ls.has(x)) scoopsA[x]++;
+        // Scoop = sole winner of BOTH hi and lo
+        if (hw.length === 1 && lw.length === 1 && hw[0] === lw[0]) scoopsA[hw[0]]++;
       }
     } else {
       for (let i = 0; i < np; i++) hiS[i] = evalPlayerHi(cfg, players[i], fullBoard);
