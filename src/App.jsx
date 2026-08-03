@@ -622,10 +622,16 @@ export default function PokerCalc() {
   board2.forEach(c => usedCards.add(c));
   deadCards.forEach(c => usedCards.add(c));
 
-  useEffect(() => {
-    setPlayers([[], []]); setBoard([]); setBoard2([]); setDeadCards([]);
+  // Changing variant keeps what's already entered instead of wiping it: hands
+  // are trimmed to the new hole size, and since the board is 5 cards in every
+  // variant it never needs trimming at all. "Clear" is still there for a
+  // deliberate reset.
+  const changeVariant = useCallback((v) => {
+    const hole = VARIANTS[v].hole;
+    setPlayers(ps => ps.map(h => h.slice(0, hole)));
+    setVariant(v);
     setResults(null); setInfo(null); setCalcStatus("idle"); setProgress(null);
-  }, [variant]);
+  }, []);
 
   const allFull = players.length >= 2 && players.every(p => p.length === cfg.hole);
 
@@ -757,7 +763,7 @@ export default function PokerCalc() {
       {/* VARIANT SELECTOR */}
       <div style={{ padding: "10px 16px 6px", display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 5 }}>
         {Object.entries(VARIANTS).map(([k, v]) => (
-          <button key={k} onClick={() => setVariant(k)} style={{
+          <button key={k} onClick={() => changeVariant(k)} style={{
             padding: "7px 2px", border: "none", borderRadius: 6,
             background: variant === k ? "#f59e0b18" : "#0f0f22",
             color: variant === k ? "#f59e0b" : "#4a4a6a",
@@ -1032,15 +1038,15 @@ export default function PokerCalc() {
           </div>
           {history.map((h, hi) => (
             <div key={h.id} onClick={() => {
+              // Used to need a setTimeout to outlive the wipe-on-variant-change
+              // effect; that effect is gone, so these can just be set directly.
               setVariant(h.variant);
-              setTimeout(() => {
-                setPlayers(h.players.map(p => [...p]));
-                setBoard([...h.board]);
-                setBoard2([...h.board2]);
-                setDeadCards([]);
-                setResults(h.results);
-                setCalcStatus("done");
-              }, 0);
+              setPlayers(h.players.map(p => [...p]));
+              setBoard([...h.board]);
+              setBoard2([...h.board2]);
+              setDeadCards([]);
+              setResults(h.results);
+              setCalcStatus("done");
             }} style={{
               background: "#0f0f22", borderRadius: 8, padding: "6px 10px",
               marginBottom: 4, border: "1px solid #1a1a32", cursor: "pointer",
