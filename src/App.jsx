@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import CardScanner from "./CardScanner.jsx";
 
 // ═══════════════════════════════════════════
 // POKER ENGINE (runs on main thread, chunked)
@@ -603,6 +604,7 @@ export default function PokerCalc() {
   const [progress, setProgress] = useState(null);
   const [info, setInfo] = useState(null);
   const [picker, setPicker] = useState(null);
+  const [showScanner, setShowScanner] = useState(false);
   const [history, setHistory] = useState(() => {
     try { const s = localStorage.getItem("pokerHistory"); return s ? JSON.parse(s) : []; }
     catch { return []; }
@@ -742,8 +744,14 @@ export default function PokerCalc() {
       `}</style>
 
       {/* HEADER */}
-      <div style={{ padding: "20px 16px 14px", background: "linear-gradient(180deg, #13132a 0%, #0b0b18 100%)" }}>
+      <div style={{ padding: "20px 16px 14px", background: "linear-gradient(180deg, #13132a 0%, #0b0b18 100%)",
+        display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, letterSpacing: -1, color: "#f59e0b" }}>♠♥ Poker Odds</h1>
+        <button onClick={() => setShowScanner(true)} style={{
+          background: "#1a1a32", border: "1px solid #2a2a4a", borderRadius: 8,
+          color: "#f59e0b", fontSize: 12, fontWeight: 700, padding: "8px 12px",
+          cursor: "pointer", fontFamily: "'Outfit', sans-serif",
+        }}>📷 Scan</button>
       </div>
 
       {/* VARIANT SELECTOR */}
@@ -987,7 +995,7 @@ export default function PokerCalc() {
             }}>{allFull ? (info?.totalCombos > 50000 ? "Monte Carlo" : "Calculate") : `Deal ${cfg.hole} cards × ${players.length} players`}</button>
             {allFull && info?.totalCombos > 50000 && (
               <button onClick={() => startCalc(true)} style={{
-                flex: 1, padding: 13, border: "none", borderRadius: 10,
+                flex: 1, padding: 13, borderRadius: 10,
                 background: "#1a1a32", color: "#8a8aa0",
                 fontSize: 14, fontWeight: 700, cursor: "pointer",
                 fontFamily: "'Outfit', sans-serif", transition: "all 0.2s",
@@ -1046,8 +1054,8 @@ export default function PokerCalc() {
                 {h.players.map((p, pi) => (
                   <div key={pi} style={{ display: "flex", alignItems: "center", gap: 2 }}>
                     <div style={{ width: 4, height: 4, borderRadius: 2, background: P_COLORS[pi % P_COLORS.length] }} />
-                    <span style={{ fontSize: 9, color: "#6a6a8a", fontFamily: "'Space Mono', monospace" }}>
-                      {p.map(c => c[0] + SUIT_SYM[c[1]]).join("")}
+                    <span style={{ fontSize: 9, fontFamily: "'Space Mono', monospace" }}>
+                      {p.map((c, ci) => <span key={ci} style={{ color: SUIT_CLR[c[1]] }}>{c[0]}{SUIT_SYM[c[1]]}</span>)}
                     </span>
                     <span style={{ fontSize: 9, color: "#8a8aa0", fontWeight: 700, fontFamily: "'Space Mono', monospace" }}>
                       {h.results.type === "standard"
@@ -1058,13 +1066,17 @@ export default function PokerCalc() {
                 ))}
               </div>
               {h.board.length > 0 && (
-                <span style={{ fontSize: 8, color: "#3a3a5c", fontFamily: "'Space Mono', monospace" }}>
-                  {h.board.map(c => c[0] + SUIT_SYM[c[1]]).join("")}
+                <span style={{ fontSize: 8, fontFamily: "'Space Mono', monospace" }}>
+                  {h.board.map((c, ci) => <span key={ci} style={{ color: SUIT_CLR[c[1]] }}>{c[0]}{SUIT_SYM[c[1]]}</span>)}
                 </span>
               )}
             </div>
           ))}
         </div>
+      )}
+
+      {showScanner && (
+        <CardScanner onClose={() => setShowScanner(false)} />
       )}
 
       {picker && (
