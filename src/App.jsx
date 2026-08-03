@@ -463,6 +463,12 @@ const VARIANTS = {
   omaha4_2line: { name: "2-Line", short: "2L", hole: 4, board: 5, hiLo: false, twoLine: true },
 };
 
+// Default variant to adopt when a scan finds this many hole cards. Several
+// variants share a hole count (4 → Omaha 4 / O4 Hi-Lo / 2-Line), so these only
+// apply when the current variant's count doesn't already fit — scanning 4 cards
+// while in O4 Hi/Lo keeps you in Hi/Lo rather than silently dropping it.
+const HOLE_TO_VARIANT = { 2: "holdem", 4: "omaha4", 5: "omaha5" };
+
 const RANKS_DISPLAY = ["A","K","Q","J","T","9","8","7","6","5","4","3","2"];
 const SUITS_DISPLAY = ["s","h","d","c"];
 const SUIT_SYM = { s: "♠", h: "♥", d: "♦", c: "♣" };
@@ -639,6 +645,22 @@ export default function PokerCalc() {
     setResults(null); setInfo(null); setCalcStatus("idle"); setProgress(null);
   }, []);
 
+  // What confirming this many cards will do — shown in the scanner so a mode
+  // change is never a surprise.
+  const scanHint = (n) => {
+    if (scanTarget?.type !== "player") {
+      return n > cfg.board
+        ? `Board holds ${cfg.board} — the last ${n - cfg.board} will be ignored.`
+        : `Sets the board (${n} of ${cfg.board}).`;
+    }
+    const want = HOLE_TO_VARIANT[n];
+    if (cfg.hole === n) return `Fills P${(scanTarget?.index ?? 0) + 1}.`;
+    if (want) return `${n} cards → switches to ${VARIANTS[want].name}. Cards already entered are kept.`;
+    return `${n} cards doesn't match a game mode. ${n > cfg.hole
+      ? `Only the first ${cfg.hole} will be used — remove ${n - cfg.hole} above.`
+      : `P${(scanTarget?.index ?? 0) + 1} will be left partly filled.`}`;
+  };
+
   const applyScan = (cards) => {
     if (!scanTarget) return;
     if (scanTarget.type === "board") {
@@ -647,7 +669,12 @@ export default function PokerCalc() {
       setBoard2(cards.slice(0, cfg.board));
     } else {
       const pi = scanTarget.index;
-      setPlayers(ps => ps.map((h, i) => (i === pi ? cards : h).slice(0, cfg.hole)));
+      const want = HOLE_TO_VARIANT[cards.length];
+      // Only move variant when the current one genuinely can't hold the scan.
+      const next = want && cfg.hole !== cards.length ? want : variant;
+      const hole = VARIANTS[next].hole;
+      setPlayers(ps => ps.map((h, i) => (i === pi ? cards : h).slice(0, hole)));
+      if (next !== variant) setVariant(next);
     }
     setResults(null); setInfo(null); setCalcStatus("idle"); setProgress(null);
     setScanTarget(null);
@@ -1112,6 +1139,7 @@ export default function PokerCalc() {
           title={scanTarget.type === "board" ? "Board"
             : scanTarget.type === "board2" ? "Board line 2"
             : `Player ${scanTarget.index + 1}`}
+          hintFor={scanHint}
           onConfirm={applyScan}
           onClose={() => setScanTarget(null)}
         />

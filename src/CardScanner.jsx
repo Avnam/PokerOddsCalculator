@@ -49,8 +49,9 @@ function getSession() {
   return sessionPromise;
 }
 
-// title — what we're scanning into, e.g. "Player 2" / "Board"
-export default function CardScanner({ title, onConfirm, onClose }) {
+// title   — what we're scanning into, e.g. "Player 2" / "Board"
+// hintFor — (count) => string describing what confirming will do
+export default function CardScanner({ title, hintFor, onConfirm, onClose }) {
   const [phase, setPhase] = useState("loading"); // loading|ready|detecting|review|error
   const [errorMsg, setErrorMsg] = useState("");
   const [detected, setDetected] = useState([]);
@@ -304,9 +305,16 @@ export default function CardScanner({ title, onConfirm, onClose }) {
                 </div>
 
                 {onConfirm && detected.length > 0 && (
-                  <button onClick={confirmCards} style={{ ...btnPrimary, width: "100%" }}>
-                    Use {detected.length} card{detected.length === 1 ? "" : "s"}
-                  </button>
+                  <>
+                    {hintFor && (
+                      <p style={{ ...hint, textAlign: "center", marginBottom: 8, lineHeight: 1.5 }}>
+                        {hintFor(detected.length)}
+                      </p>
+                    )}
+                    <button onClick={confirmCards} style={{ ...btnPrimary, width: "100%" }}>
+                      Use {detected.length} card{detected.length === 1 ? "" : "s"}
+                    </button>
+                  </>
                 )}
               </>
             )}
