@@ -49,20 +49,28 @@ function getSession() {
   return sessionPromise;
 }
 
-// title   — what we're scanning into, e.g. "Player 2" / "Board"
-// hintFor — (count) => string describing what confirming will do
-export default function CardScanner({ title, hintFor, onConfirm, onClose }) {
+// title        — what we're scanning into, e.g. "Player 2" / "Board"
+// hintFor      — (count) => string describing what confirming will do
+// usedElsewhere — { card: "where" } for cards already placed outside this
+//                 target; those get dropped automatically and reported.
+export default function CardScanner({ title, hintFor, usedElsewhere = {}, onConfirm, onClose }) {
   const [phase, setPhase] = useState("loading"); // loading|ready|detecting|review|error
   const [errorMsg, setErrorMsg] = useState("");
   const [detected, setDetected] = useState([]);
   const [conf, setConf] = useState(CONF_THRESHOLD);
   const [lastImage, setLastImage] = useState(null); // keep for re-run on slider change
   const [drawData, setDrawData] = useState(null);   // {img, dets, scale, dx, dy} for canvas draw
+  const [dropped, setDropped] = useState([]);       // auto-removed duplicates
 
   const sessionRef = useRef(null);
   const canvasRef = useRef(null);
   const uploadRef = useRef(null);
   const cameraRef = useRef(null);
+
+  // Held in a ref so runDetection can stay a stable callback — the prop is a
+  // fresh object every render and would otherwise rebuild it constantly.
+  const usedRef = useRef(usedElsewhere);
+  usedRef.current = usedElsewhere;
 
   // ─── Load model once ───
   useEffect(() => {
@@ -171,10 +179,18 @@ export default function CardScanner({ title, hintFor, onConfirm, onClose }) {
       const output = results[sessionRef.current.outputNames[0]];
       const dets = decode(output, threshold);
 
+      // A card already sitting in another hand / the board / the dead pile
+      // can't legally be here too, so drop it and say so rather than letting
+      // a duplicate through into the equity calc.
+      const used = usedRef.current;
+      const keep = [], drop = [];
+      for (const d of dets) (used[d.card] ? drop : keep).push(d);
+
       // Stash everything needed to draw; the actual draw happens in an
       // effect once the review canvas is mounted (canvasRef exists there).
-      setDrawData({ img, dets, scale, dx, dy });
-      setDetected(dets);
+      setDrawData({ img, dets, scale, dx, dy, dropped: new Set(drop.map(d => d.card)) });
+      setDetected(keep);
+      setDropped(drop.map(d => ({ card: d.card, where: used[d.card] })));
       setPhase("review");
     } catch (e) {
       setErrorMsg("Detection failed: " + (e?.message || e));
@@ -187,7 +203,7 @@ export default function CardScanner({ title, hintFor, onConfirm, onClose }) {
     if (phase !== "review" || !drawData) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const { img, dets, scale, dx, dy } = drawData;
+    const { img, dets, scale, dx, dy, dropped: dropSet } = drawData;
     const maxW = 420;
     const dispScale = Math.min(1, maxW / img.width);
     canvas.width = img.width * dispScale;
@@ -200,10 +216,14 @@ export default function CardScanner({ title, hintFor, onConfirm, onClose }) {
       const ox2 = (b.x2 - dx) / scale, oy2 = (b.y2 - dy) / scale;
       const rx1 = ox1 * dispScale, ry1 = oy1 * dispScale;
       const rx2 = ox2 * dispScale, ry2 = oy2 * dispScale;
-      ctx.strokeStyle = "#f59e0b"; ctx.lineWidth = 2;
+      const isDropped = dropSet?.has(dobj.card);
+      const color = isDropped ? "#6a3a3a" : "#f59e0b";
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
+      ctx.setLineDash(isDropped ? [4, 3] : []);
       ctx.strokeRect(rx1, ry1, rx2 - rx1, ry2 - ry1);
-      ctx.fillStyle = "#f59e0b"; ctx.font = "bold 13px monospace";
-      ctx.fillText(dobj.card[0] + SUIT_SYM[dobj.card[1]], rx1 + 2, Math.max(12, ry1 - 4));
+      ctx.fillStyle = color; ctx.font = "bold 13px monospace";
+      const tag = dobj.card[0] + SUIT_SYM[dobj.card[1]] + (isDropped ? " dup" : "");
+      ctx.fillText(tag, rx1 + 2, Math.max(12, ry1 - 4));
     }
   }, [phase, drawData]);
 
@@ -287,7 +307,22 @@ export default function CardScanner({ title, hintFor, onConfirm, onClose }) {
                     style={{ width: "100%", accentColor: "#f59e0b" }} />
                 </div>
 
-                {detected.length === 0 && <p style={{ ...hint, textAlign: "center" }}>
+                {dropped.length > 0 && (
+                  <div style={{ background: "#2a1a1a", border: "1px solid #4a2a2a", borderRadius: 8,
+                    padding: "8px 10px", marginBottom: 10, fontSize: 11, lineHeight: 1.5, color: "#c88a8a" }}>
+                    <b style={{ color: "#ef4444" }}>Already in use — removed automatically:</b><br />
+                    {dropped.map((d, i) => (
+                      <span key={d.card}>
+                        {i > 0 && ", "}
+                        <span style={{ fontFamily: "'Space Mono', monospace", fontWeight: 700,
+                          color: SUIT_CLR[d.card[1]] }}>{d.card[0]}{SUIT_SYM[d.card[1]]}</span>
+                        <span style={{ color: "#8a6a6a" }}> on {d.where}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {detected.length === 0 && dropped.length === 0 && <p style={{ ...hint, textAlign: "center" }}>
                   No cards above threshold. Lower the slider or try a clearer image.</p>}
 
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>

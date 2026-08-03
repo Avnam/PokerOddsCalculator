@@ -645,6 +645,20 @@ export default function PokerCalc() {
     setResults(null); setInfo(null); setCalcStatus("idle"); setProgress(null);
   }, []);
 
+  // Cards already committed somewhere other than the thing we're scanning into.
+  // Maps card -> a human label, so the scanner can name where the clash is.
+  const usedElsewhere = (() => {
+    const m = {};
+    players.forEach((hand, i) => {
+      if (scanTarget?.type === "player" && scanTarget.index === i) return;
+      hand.forEach(c => { m[c] = `P${i + 1}`; });
+    });
+    if (scanTarget?.type !== "board") board.forEach(c => { m[c] = "the board"; });
+    if (scanTarget?.type !== "board2") board2.forEach(c => { m[c] = "board line 2"; });
+    deadCards.forEach(c => { m[c] = "dead cards"; });
+    return m;
+  })();
+
   // What confirming this many cards will do — shown in the scanner so a mode
   // change is never a surprise.
   const scanHint = (n) => {
@@ -1139,6 +1153,7 @@ export default function PokerCalc() {
           title={scanTarget.type === "board" ? "Board"
             : scanTarget.type === "board2" ? "Board line 2"
             : `Player ${scanTarget.index + 1}`}
+          usedElsewhere={usedElsewhere}
           hintFor={scanHint}
           onConfirm={applyScan}
           onClose={() => setScanTarget(null)}
