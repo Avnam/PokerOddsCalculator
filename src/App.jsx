@@ -469,6 +469,12 @@ const SUIT_SYM = { s: "♠", h: "♥", d: "♦", c: "♣" };
 const SUIT_CLR = { s: "#c8ccd4", h: "#ef4444", d: "#3b82f6", c: "#22c55e" };
 const P_COLORS = ["#f59e0b","#6366f1","#ec4899","#14b8a6","#f97316","#8b5cf6","#06b6d4","#84cc16","#e11d48","#a855f7"];
 
+// Paperclip that opens the scanner for one player / the board
+const clipBtn = {
+  background: "none", border: "none", color: "#f59e0b", fontSize: 13,
+  cursor: "pointer", padding: "0 4px", lineHeight: 1,
+};
+
 // ═══════════════════════════════════════════
 // COMPONENTS
 // ═══════════════════════════════════════════
@@ -604,7 +610,7 @@ export default function PokerCalc() {
   const [progress, setProgress] = useState(null);
   const [info, setInfo] = useState(null);
   const [picker, setPicker] = useState(null);
-  const [showScanner, setShowScanner] = useState(false);
+  const [scanTarget, setScanTarget] = useState(null); // {type:"player",index}|{type:"board"}
   const [history, setHistory] = useState(() => {
     try { const s = localStorage.getItem("pokerHistory"); return s ? JSON.parse(s) : []; }
     catch { return []; }
@@ -632,6 +638,20 @@ export default function PokerCalc() {
     setVariant(v);
     setResults(null); setInfo(null); setCalcStatus("idle"); setProgress(null);
   }, []);
+
+  const applyScan = (cards) => {
+    if (!scanTarget) return;
+    if (scanTarget.type === "board") {
+      setBoard(cards.slice(0, cfg.board));
+    } else if (scanTarget.type === "board2") {
+      setBoard2(cards.slice(0, cfg.board));
+    } else {
+      const pi = scanTarget.index;
+      setPlayers(ps => ps.map((h, i) => (i === pi ? cards : h).slice(0, cfg.hole)));
+    }
+    setResults(null); setInfo(null); setCalcStatus("idle"); setProgress(null);
+    setScanTarget(null);
+  };
 
   const allFull = players.length >= 2 && players.every(p => p.length === cfg.hole);
 
@@ -750,14 +770,8 @@ export default function PokerCalc() {
       `}</style>
 
       {/* HEADER */}
-      <div style={{ padding: "20px 16px 14px", background: "linear-gradient(180deg, #13132a 0%, #0b0b18 100%)",
-        display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ padding: "20px 16px 14px", background: "linear-gradient(180deg, #13132a 0%, #0b0b18 100%)" }}>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, letterSpacing: -1, color: "#f59e0b" }}>♠♥ Poker Odds</h1>
-        <button onClick={() => setShowScanner(true)} style={{
-          background: "#1a1a32", border: "1px solid #2a2a4a", borderRadius: 8,
-          color: "#f59e0b", fontSize: 12, fontWeight: 700, padding: "8px 12px",
-          cursor: "pointer", fontFamily: "'Outfit', sans-serif",
-        }}>📷 Scan</button>
       </div>
 
       {/* VARIANT SELECTOR */}
@@ -791,6 +805,8 @@ export default function PokerCalc() {
                 <div style={{ width: 6, height: 6, borderRadius: 3, background: pc, boxShadow: `0 0 6px ${pc}66` }} />
                 <span style={{ fontSize: 11, fontWeight: 700, color: "#6a6a8a", fontFamily: "'Space Mono', monospace" }}>P{pi + 1}</span>
                 <div style={{ flex: 1 }} />
+                <button onClick={() => setScanTarget({ type: "player", index: pi })}
+                  title={`Scan cards for P${pi + 1}`} style={clipBtn}>📎</button>
                 {players.length > 2 && (
                   <button onClick={() => { setPlayers(p => p.filter((_, i) => i !== pi)); setResults(null) }} style={{
                     background: "none", border: "none", color: "#4a2a2a", fontSize: 14, cursor: "pointer", padding: "0 2px", lineHeight: 1,
@@ -836,8 +852,13 @@ export default function PokerCalc() {
       {/* BOARD */}
       <div style={{ padding: "8px 12px 4px" }}>
         <div style={{ background: "#0f0f22", borderRadius: 10, padding: "8px 10px", border: "1px solid #1a1a32" }}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: "#3a3a5c", marginBottom: 5, fontFamily: "'Space Mono', monospace", letterSpacing: 1 }}>
-            BOARD{cfg.twoLine ? " · LINE 1" : ""}
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 5 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: "#3a3a5c", fontFamily: "'Space Mono', monospace", letterSpacing: 1 }}>
+              BOARD{cfg.twoLine ? " · LINE 1" : ""}
+            </div>
+            <div style={{ flex: 1 }} />
+            <button onClick={() => setScanTarget({ type: "board" })}
+              title="Scan the board" style={clipBtn}>📎</button>
           </div>
           <div style={{ display: "flex", gap: 4 }}>
             {board.map((c, i) => <MiniCard key={i} card={c} onRemove={() => removeCard("board", null, i)} />)}
@@ -846,7 +867,12 @@ export default function PokerCalc() {
         </div>
         {cfg.twoLine && (
           <div style={{ background: "#0f0f22", borderRadius: 10, padding: "8px 10px", marginTop: 6, border: "1px solid #1a1a32" }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: "#3a3a5c", marginBottom: 5, fontFamily: "'Space Mono', monospace", letterSpacing: 1 }}>BOARD · LINE 2</div>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 5 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "#3a3a5c", fontFamily: "'Space Mono', monospace", letterSpacing: 1 }}>BOARD · LINE 2</div>
+              <div style={{ flex: 1 }} />
+              <button onClick={() => setScanTarget({ type: "board2" })}
+                title="Scan board line 2" style={clipBtn}>📎</button>
+            </div>
             <div style={{ display: "flex", gap: 4 }}>
               {board2.map((c, i) => <MiniCard key={i} card={c} onRemove={() => removeCard("board2", null, i)} />)}
               {board2.length < cfg.board && <MiniCard ghost onGhostClick={() => setPicker({ type: "board2" })} />}
@@ -1081,8 +1107,14 @@ export default function PokerCalc() {
         </div>
       )}
 
-      {showScanner && (
-        <CardScanner onClose={() => setShowScanner(false)} />
+      {scanTarget && (
+        <CardScanner
+          title={scanTarget.type === "board" ? "Board"
+            : scanTarget.type === "board2" ? "Board line 2"
+            : `Player ${scanTarget.index + 1}`}
+          onConfirm={applyScan}
+          onClose={() => setScanTarget(null)}
+        />
       )}
 
       {picker && (

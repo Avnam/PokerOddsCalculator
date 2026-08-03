@@ -49,7 +49,8 @@ function getSession() {
   return sessionPromise;
 }
 
-export default function CardScanner({ onConfirm, onClose }) {
+// title — what we're scanning into, e.g. "Player 2" / "Board"
+export default function CardScanner({ title, onConfirm, onClose }) {
   const [phase, setPhase] = useState("loading"); // loading|ready|detecting|review|error
   const [errorMsg, setErrorMsg] = useState("");
   const [detected, setDetected] = useState([]);
@@ -59,7 +60,8 @@ export default function CardScanner({ onConfirm, onClose }) {
 
   const sessionRef = useRef(null);
   const canvasRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const uploadRef = useRef(null);
+  const cameraRef = useRef(null);
 
   // ─── Load model once ───
   useEffect(() => {
@@ -232,7 +234,9 @@ export default function CardScanner({ onConfirm, onClose }) {
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "14px 16px", borderBottom: "1px solid #1a1a32" }}>
-        <span style={{ fontSize: 15, fontWeight: 800, color: "#f59e0b" }}>Scan cards (test)</span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: "#f59e0b" }}>
+          Scan{title ? ` → ${title}` : " cards"}
+        </span>
         <button onClick={onClose} style={{ background: "none", border: "none", color: "#6a6a8a",
           fontSize: 22, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>×</button>
       </div>
@@ -249,10 +253,19 @@ export default function CardScanner({ onConfirm, onClose }) {
 
         {(phase === "ready" || phase === "detecting" || phase === "review") && (
           <div>
-            <button onClick={() => fileInputRef.current?.click()} style={{ ...btnPrimary, width: "100%" }}>
-              {phase === "review" ? "Pick another image" : "Upload card image"}
-            </button>
-            <input ref={fileInputRef} type="file" accept="image/*"
+            {/* Two separate inputs rather than one: the click has to happen
+                inside the user gesture, so each source gets its own. */}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => cameraRef.current?.click()} style={{ ...btnPrimary, flex: 1 }}>
+                📷 {phase === "review" ? "Retake" : "Take photo"}
+              </button>
+              <button onClick={() => uploadRef.current?.click()} style={{ ...btnSecondary, flex: 1, marginTop: 0 }}>
+                🖼️ {phase === "review" ? "Pick another" : "Upload photo"}
+              </button>
+            </div>
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment"
+              onChange={onFilePicked} style={{ display: "none" }} />
+            <input ref={uploadRef} type="file" accept="image/*"
               onChange={onFilePicked} style={{ display: "none" }} />
 
             {phase === "detecting" && <Centered><Spinner /><p style={dim}>Detecting…</p></Centered>}
