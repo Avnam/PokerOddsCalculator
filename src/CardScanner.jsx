@@ -26,6 +26,27 @@ const SUITS_ORDER = ["C", "D", "H", "S"];
 const CLASS_NAMES = [];
 for (const r of RANKS_ORDER) for (const s of SUITS_ORDER) CLASS_NAMES.push(r + s);
 
+// The model is trained on upright cards, so a sideways or upside-down photo can
+// come back empty. Retry order: as-shot, then 180° (a table read from the wrong
+// side — the common case), then the two landscape orientations.
+const ORIENTATIONS = [0, 180, 90, 270];
+
+// Returns a canvas holding the rotated image. A canvas is a valid drawImage
+// source and exposes width/height, so everything downstream treats it exactly
+// like the original <img> — no box-coordinate maths needed anywhere else.
+function rotateImage(img, deg) {
+  if (!deg) return img;
+  const swap = deg === 90 || deg === 270;
+  const c = document.createElement("canvas");
+  c.width = swap ? img.height : img.width;
+  c.height = swap ? img.width : img.height;
+  const ctx = c.getContext("2d");
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate((deg * Math.PI) / 180);
+  ctx.drawImage(img, -img.width / 2, -img.height / 2);
+  return c;
+}
+
 function labelToCard(label) {
   const suit = label.slice(-1).toLowerCase();
   let rank = label.slice(0, -1).toUpperCase();
@@ -61,6 +82,7 @@ export default function CardScanner({ title, hintFor, usedElsewhere = {}, onConf
   const [lastImage, setLastImage] = useState(null); // keep for re-run on slider change
   const [drawData, setDrawData] = useState(null);   // {img, dets, scale, dx, dy} for canvas draw
   const [dropped, setDropped] = useState([]);       // auto-removed duplicates
+  const [usedDeg, setUsedDeg] = useState(0);        // orientation the result came from
 
   const sessionRef = useRef(null);
   const canvasRef = useRef(null);
@@ -168,16 +190,30 @@ export default function CardScanner({ title, hintFor, usedElsewhere = {}, onConf
     return [...byCard.values()].sort((a, b) => b.conf - a.conf);
   }
 
-  const runDetection = useCallback(async (img, threshold) => {
+  // forceDeg pins a single orientation (used by the manual rotate button and by
+  // re-runs from the confidence slider); otherwise we walk ORIENTATIONS and stop
+  // at the first one that finds anything.
+  const runDetection = useCallback(async (img, threshold, forceDeg = null) => {
     if (!sessionRef.current) return;
     setPhase("detecting");
     try {
-      const { tensor, scale, dx, dy } = preprocess(img);
-      const feeds = {};
-      feeds[sessionRef.current.inputNames[0]] = tensor;
-      const results = await sessionRef.current.run(feeds);
-      const output = results[sessionRef.current.outputNames[0]];
-      const dets = decode(output, threshold);
+      const inputName = sessionRef.current.inputNames[0];
+      const outputName = sessionRef.current.outputNames[0];
+      let best = null;
+
+      for (const deg of forceDeg === null ? ORIENTATIONS : [forceDeg]) {
+        const src = rotateImage(img, deg);
+        const { tensor, scale, dx, dy } = preprocess(src);
+        const results = await sessionRef.current.run({ [inputName]: tensor });
+        const dets = decode(results[outputName], threshold);
+        // Hold the first attempt so an all-empty search still has something to
+        // show, then stop as soon as an orientation actually finds cards.
+        if (!best) best = { src, dets, scale, dx, dy, deg };
+        if (dets.length) { best = { src, dets, scale, dx, dy, deg }; break; }
+      }
+
+      const { src, dets, scale, dx, dy, deg } = best;
+      setUsedDeg(deg);
 
       // A card already sitting in another hand / the board / the dead pile
       // can't legally be here too, so drop it and say so rather than letting
@@ -188,7 +224,7 @@ export default function CardScanner({ title, hintFor, usedElsewhere = {}, onConf
 
       // Stash everything needed to draw; the actual draw happens in an
       // effect once the review canvas is mounted (canvasRef exists there).
-      setDrawData({ img, dets, scale, dx, dy, dropped: new Set(drop.map(d => d.card)) });
+      setDrawData({ img: src, dets, scale, dx, dy, dropped: new Set(drop.map(d => d.card)) });
       setDetected(keep);
       setDropped(drop.map(d => ({ card: d.card, where: used[d.card] })));
       setPhase("review");
@@ -235,10 +271,18 @@ export default function CardScanner({ title, hintFor, usedElsewhere = {}, onConf
     img.src = URL.createObjectURL(file);
   }, [runDetection, conf]);
 
-  // re-run when threshold changes (if we have an image)
+  // Re-run when the threshold changes, pinned to the orientation we already
+  // settled on — re-searching all four here would be slow and could silently
+  // jump the image to a different rotation mid-adjustment.
   const onConfChange = (v) => {
     setConf(v);
-    if (lastImage) runDetection(lastImage, v);
+    if (lastImage) runDetection(lastImage, v, usedDeg);
+  };
+
+  // Manual override for the partial case: the auto-search stops as soon as it
+  // finds *anything*, so an orientation that finds 1 of 2 cards ends the search.
+  const rotateManually = () => {
+    if (lastImage) runDetection(lastImage, conf, (usedDeg + 90) % 360);
   };
 
   const removeCard = (card) => setDetected(d => d.filter(x => x.card !== card));
@@ -289,7 +333,8 @@ export default function CardScanner({ title, hintFor, usedElsewhere = {}, onConf
             <input ref={uploadRef} type="file" accept="image/*"
               onChange={onFilePicked} style={{ display: "none" }} />
 
-            {phase === "detecting" && <Centered><Spinner /><p style={dim}>Detecting…</p></Centered>}
+            {phase === "detecting" && <Centered><Spinner /><p style={dim}>Detecting…</p>
+              <p style={hint}>rotating and retrying if nothing turns up</p></Centered>}
 
             {(phase === "review") && (
               <>
@@ -305,6 +350,16 @@ export default function CardScanner({ title, hintFor, usedElsewhere = {}, onConf
                   <input type="range" min="0.1" max="0.9" step="0.05" value={conf}
                     onChange={e => onConfChange(parseFloat(e.target.value))}
                     style={{ width: "100%", accentColor: "#f59e0b" }} />
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                    <button onClick={rotateManually}
+                      style={{ ...btnSecondary, marginTop: 0, padding: "6px 12px", fontSize: 12 }}>
+                      ⟳ Rotate
+                    </button>
+                    <span style={{ fontSize: 10, color: "#4a4a6a", fontFamily: "'Space Mono', monospace" }}>
+                      {usedDeg === 0 ? "as shot" : `rotated ${usedDeg}°`}
+                    </span>
+                  </div>
                 </div>
 
                 {dropped.length > 0 && (
@@ -322,8 +377,8 @@ export default function CardScanner({ title, hintFor, usedElsewhere = {}, onConf
                   </div>
                 )}
 
-                {detected.length === 0 && dropped.length === 0 && <p style={{ ...hint, textAlign: "center" }}>
-                  No cards above threshold. Lower the slider or try a clearer image.</p>}
+                {detected.length === 0 && dropped.length === 0 && <p style={{ ...hint, textAlign: "center", lineHeight: 1.5 }}>
+                  Nothing found at any rotation. Lower the slider, rotate manually, or try a clearer photo.</p>}
 
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
                   {detected.map(d => (
