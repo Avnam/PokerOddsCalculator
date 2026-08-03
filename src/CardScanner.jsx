@@ -99,6 +99,9 @@ export default function CardScanner({ title, hintFor, usedElsewhere = {}, onConf
     let cancelled = false;
     (async () => {
       try {
+        // No wasmPaths override: Vite resolves onnxruntime's own wasm asset, so
+        // the binaries always match the bundled glue code and the page has no
+        // third-party runtime dependency.
         const session = await getSession();
         if (cancelled) return;
         sessionRef.current = session;
