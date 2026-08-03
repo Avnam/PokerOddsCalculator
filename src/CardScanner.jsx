@@ -36,6 +36,19 @@ function labelToCard(label) {
 const SUIT_SYM = { s: "♠", h: "♥", d: "♦", c: "♣" };
 const SUIT_CLR = { s: "#c8ccd4", h: "#ef4444", d: "#3b82f6", c: "#22c55e" };
 
+// Building the session parses ~43 MB, so build it once at module scope and
+// share it — the scanner is opened and closed repeatedly, and paying that on
+// every mount would make reopening it feel broken.
+let sessionPromise = null;
+function getSession() {
+  if (!sessionPromise) {
+    sessionPromise = ort.InferenceSession
+      .create(MODEL_URL, { executionProviders: ["wasm"], graphOptimizationLevel: "all" })
+      .catch(e => { sessionPromise = null; throw e; }); // let a retry rebuild it
+  }
+  return sessionPromise;
+}
+
 export default function CardScanner({ onConfirm, onClose }) {
   const [phase, setPhase] = useState("loading"); // loading|ready|detecting|review|error
   const [errorMsg, setErrorMsg] = useState("");
@@ -53,13 +66,7 @@ export default function CardScanner({ onConfirm, onClose }) {
     let cancelled = false;
     (async () => {
       try {
-        // No wasmPaths override: let Vite resolve onnxruntime's own wasm asset
-        // so the binaries always match the bundled glue code and the page has
-        // no third-party runtime dependency.
-        const session = await ort.InferenceSession.create(MODEL_URL, {
-          executionProviders: ["wasm"],
-          graphOptimizationLevel: "all",
-        });
+        const session = await getSession();
         if (cancelled) return;
         sessionRef.current = session;
         setPhase("ready");
